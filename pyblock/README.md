@@ -22,6 +22,8 @@ You can do so by `pip install ipyparallel`.
 
 You should be able to open the Jupyter notebook from terminal by typing `jupyter notebook` in the `pyblock` directory.
 
+You may also view the notebook [here](https://nbviewer.jupyter.org/github/relab/interview/blob/main/pyblock/pyblock.ipynb).
+
 ### Instructions
 
 Carefully read through the descriptions in each section.
