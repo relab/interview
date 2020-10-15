@@ -1,5 +1,6 @@
 {
     "cSpell.words": [
+        "Jupyter",
         "Merkle",
         "Satoshi",
         "addblock",
@@ -7,10 +8,12 @@
         "blockchains",
         "createblockchain",
         "fmtree",
+        "ipyparallel",
         "permissionless",
         "pmtree",
         "printchain",
         "promptui",
+        "pyblock",
         "stretchr",
         "struct"
     ]
