@@ -1,41 +1,45 @@
 package main
 
 import (
-	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/assert"
 )
 
-var table = []struct {
+var trees = []struct {
+	name             string
 	data             [][]byte
 	expectedRootHash []byte
-	expectedPath     [][]byte
+	expectedProof    [][]byte
 	expectedIndex    []int64
 }{
 	{
+		name: "1 node",
 		data: [][]byte{
 			[]byte("node1"),
 		},
 		expectedRootHash: Hex2Bytes("ca12f31b8cbf5f29e268ea64c20a37f3d50b539d891db0c3ebc7c0f66b1fb98a"),
-		expectedPath:     [][]byte{}, // Path for n1 => []
+		expectedProof:    [][]byte{}, // Proof for n1 => []
 		expectedIndex:    []int64{},
 	},
 	{
+		name: "3 nodes",
 		data: [][]byte{
 			[]byte("node1"),
 			[]byte("node2"),
 			[]byte("node3"), // n3.Hash == n4.Hash => duplicated since data is odd
 		},
 		expectedRootHash: Hex2Bytes("4e3e44e55926330ab6c31892f980f8bfd1a6e910ff1ebc3f778211377f35227e"),
-		expectedPath: HexSlice2ByteSlice([]string{
+		expectedProof: HexSlice2ByteSlice([]string{
 			"3b5bb1c6e7b76daba8afd89516e24140a67fc6be2ba071cc3b97d1b2e08c238d", "64b04b718d8b7c5b6fd17f7ec221945c034cfce3be4118da33244966150c4bd4",
-		}), // Path for n3 => [n4, n5]
+		}), // Proof for n3 => [n4, n5]
 		expectedIndex: []int64{rightNode, leftNode},
 	},
 	{
+		name: "5 nodes",
 		data: [][]byte{
 			[]byte("node1"),
 			[]byte("node2"),
@@ -44,13 +48,14 @@ var table = []struct {
 			[]byte("node5"),
 		},
 		expectedRootHash: Hex2Bytes("0ccea9694561f79e2edff0e1a0d22065344b7eb2cbee9eb8a8c715e67107dbd0"),
-		expectedPath: HexSlice2ByteSlice([]string{
+		expectedProof: HexSlice2ByteSlice([]string{
 			"d2b8f62a7e335bbd5576c8422844760f22ec378009eeea790c41e4dc45f23c33", "64b04b718d8b7c5b6fd17f7ec221945c034cfce3be4118da33244966150c4bd4",
 			"90ce8ee0e714db7e83c332ef0b7a9714416846ae414414e4168dd30e84351d66",
-		}), // Path for n3 => [n4, n7, n12]
+		}), // Proof for n3 => [n4, n7, n12]
 		expectedIndex: []int64{rightNode, leftNode, rightNode},
 	},
 	{
+		name: "8 nodes",
 		data: [][]byte{
 			[]byte("node1"),
 			[]byte("node2"),
@@ -62,50 +67,56 @@ var table = []struct {
 			[]byte("node8"),
 		},
 		expectedRootHash: Hex2Bytes("38c456cfef483f85c116a37a6c6f73791a91a53e2445533311ad5c54b1054226"),
-		expectedPath: HexSlice2ByteSlice([]string{
+		expectedProof: HexSlice2ByteSlice([]string{
 			"d2b8f62a7e335bbd5576c8422844760f22ec378009eeea790c41e4dc45f23c33", "64b04b718d8b7c5b6fd17f7ec221945c034cfce3be4118da33244966150c4bd4",
 			"4a3bef0c7511a5e0a652d37cb28c364df456605bb71e12846cf817fb9ddf8116",
-		}), // Path for n3 => [n4, n9, n14]
+		}), // Proof for n3 => [n4, n9, n14]
 		expectedIndex: []int64{rightNode, leftNode, rightNode},
 	},
 }
 
 func TestMerkleTree(t *testing.T) {
-	for i := 0; i < len(table); i++ {
-		mTree := NewMerkleTree(table[i].data)
-		if mTree == nil {
-			t.Fatal("Got an error while creating the Merkle tree")
-		}
-		if !bytes.Equal(mTree.MerkleRootHash(), table[i].expectedRootHash) {
-			t.Errorf("error: expected hash equal to %x got %x", table[i].expectedRootHash, mTree.MerkleRootHash())
-		}
+	for i := 0; i < len(trees); i++ {
+		t.Run(trees[i].name, func(t *testing.T) {
+			mTree := NewMerkleTree(trees[i].data)
+			if mTree == nil {
+				t.Fatal("Merkle tree is nil")
+			}
+			if diff := cmp.Diff(trees[i].expectedRootHash, mTree.MerkleRootHash()); diff != "" {
+				t.Errorf("wrong root: (-want +got)\n%s", diff)
+			}
+		})
 	}
 }
 
 func TestMakeMerkleProof(t *testing.T) {
-	for i := 0; i < len(table); i++ {
-		mTree := NewMerkleTree(table[i].data)
-		hash := sha256.New()
-		if i == 0 {
-			hash.Write(table[i].data[0]) // node1
-		} else {
-			hash.Write(table[i].data[2]) // node3
-		}
-		proof, index, _ := mTree.MakeMerkleProof(hash.Sum(nil))
-		assert.Equal(t, table[i].expectedPath, proof, "Merkle proof is incorrect")
-		assert.Equal(t, table[i].expectedIndex, index, "Merkle proof index is incorrect")
+	for i := 0; i < len(trees); i++ {
+		t.Run(trees[i].name, func(t *testing.T) {
+			mTree := NewMerkleTree(trees[i].data)
+			hash := sha256.New()
+			if i == 0 {
+				hash.Write(trees[i].data[0]) // node1
+			} else {
+				hash.Write(trees[i].data[2]) // node3
+			}
+			proof, index, _ := mTree.MakeMerkleProof(hash.Sum(nil))
+			assert.Equal(t, trees[i].expectedProof, proof, "Merkle proof is incorrect")
+			assert.Equal(t, trees[i].expectedIndex, index, "Merkle proof index is incorrect")
+		})
 	}
 }
 
 func TestVerifyMerkleProof(t *testing.T) {
-	for i := 0; i < len(table); i++ {
-		hash := sha256.New()
-		if i == 0 {
-			hash.Write(table[i].data[0]) // node1
-		} else {
-			hash.Write(table[i].data[2]) // node3
-		}
-		assert.True(t, VerifyProof(table[i].expectedRootHash, hash.Sum(nil), MerkleProof{table[i].expectedPath, table[i].expectedIndex}), "Inclusion proof couldn't be satisfied")
+	for i := 0; i < len(trees); i++ {
+		t.Run(trees[i].name, func(t *testing.T) {
+			hash := sha256.New()
+			if i == 0 {
+				hash.Write(trees[i].data[0]) // node1
+			} else {
+				hash.Write(trees[i].data[2]) // node3
+			}
+			assert.True(t, VerifyProof(trees[i].expectedRootHash, hash.Sum(nil), MerkleProof{trees[i].expectedProof, trees[i].expectedIndex}), "Inclusion proof couldn't be satisfied")
+		})
 	}
 }
 
@@ -117,7 +128,7 @@ func TestMerkleProofNodeNotFound(t *testing.T) {
 	n := NewMerkleNode(nil, nil, []byte("other"))
 	mTree := NewMerkleTree([][]byte{[]byte("node1")})
 	if mTree == nil {
-		t.Fatal("Got an error while creating the Merkle tree")
+		t.Fatal("Merkle tree is nil")
 	}
 	_, _, err := mTree.MakeMerkleProof(n.Hash)
 	assert.Errorf(t, err, "Node %x not found", n.Hash)
